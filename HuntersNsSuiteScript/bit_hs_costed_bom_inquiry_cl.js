@@ -21,22 +21,44 @@ function onFieldChange(type, name, linenum)
 		document.getElementById("iframeNetSuiteStandardReportData").src= '/app/accounting/transactions/manufacturing/costedbillofmaterialslist.nl?report=T&toplevelonly=' + nlapiGetFieldValue('custpage_top_level') + '&trandate=' + nlapiGetFieldValue('custpage_date') + '&location=' + nlapiGetFieldValue('custpage_location') + '&assemblyitem=' + nlapiGetFieldValue('custpage_item') + '&revision=';
 }
 
-//This function builds and exports a file with CSV content populated into Hidden Field 
+//This function builds and exports a file with CSV content extracted from Custom HTML Report table 
 function exportCsv()
 {
-	var tmpElement = document.createElement('a');
-	tmpElement.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(nlapiGetFieldValue('custpage_csv_content')));
-	tmpElement.setAttribute('download', 'Costed Bill of Materials Inquiry.csv');
+	
+	var customCostedBOMInquiryReportHtmlBodyTable = document.getElementById("tblCustomCostedBOMInquiry");
+	if ( typeof(customCostedBOMInquiryReportHtmlBodyTable) !== "undefined" && customCostedBOMInquiryReportHtmlBodyTable !== null )
+	{
+		var csvContent = '';	
+		for(var i=0; i<customCostedBOMInquiryReportHtmlBodyTable.rows.length; i++)
+		{
+			for(var j=0; j<customCostedBOMInquiryReportHtmlBodyTable.rows[i].cells.length; j++)
+			{
+				var cellContent = customCostedBOMInquiryReportHtmlBodyTable.rows[i].cells[j];
+				var cellText = String(cellContent.innerHTML).replace('&nbsp;', '').replace('&amp;', '&').replace('&quot;', '"') ;
+				
+				if(i==0 || j==0)
+					cellText = (cellContent.textContent || cellContent.innerText || "");
+				
+				//alert(customCostedBOMInquiryReportHtmlBodyTable.rows[i].cells[j].innerHTML);
+				//alert(customCostedBOMInquiryReportHtmlBodyTable.rows[i].cells[j]);
+				csvContent += '"' + cellText + '",';
+			}
+			csvContent += '\n';
+		}
+		
+		var tmpElement = document.createElement('a');
+		tmpElement.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent));
+		tmpElement.setAttribute('download', 'Costed Bill of Materials Inquiry.csv');
 
-	tmpElement.style.display = 'none';
-	document.body.appendChild(tmpElement);
+		tmpElement.style.display = 'none';
+		document.body.appendChild(tmpElement);
 
-	tmpElement.click();
-	document.body.removeChild(tmpElement);
+		tmpElement.click();
+		document.body.removeChild(tmpElement);
+	}
 }
 
 //This function collects and merge data to build an HTML Table
-//It also populates a hidden field with CSV Content to be exported by User
 function buildCustomReport() 
 { 
 	nlapiSetFieldValue('custpage_report', '<br><p>Loading...</p>', false);
@@ -58,7 +80,6 @@ function buildCustomReport()
 		return;
 	}
 	
-	var NsReportHtmlBodyCells = NsReportHtmlBodyTable.getElementsByTagName("td");
 	var NsReportColumnNames = new Array();
 	for(var i=0; i<NsReportHtmlBodyTable.rows[0].cells.length; i++)
 		NsReportColumnNames.push(NsReportHtmlBodyTable.rows[0].cells[i].innerHTML);
@@ -134,6 +155,9 @@ function buildCustomReport()
 	
 	//Building a Matrix of data in order to avoid many loops to get Information
 	var itemNameMtx = new Array();
+	var itemNameBomLevelMtx = new Array();
+	var itemParentItemNameMtx = new Array();
+	var itemBomLevelMtx = new Array();
 	var itemDescriptionMtx = new Array();
 	var itemQtyOnHandMtx = new Array();
 	var itemQtyAvailableMtx = new Array();
@@ -141,15 +165,15 @@ function buildCustomReport()
 	var itemQtyOnOrderMtx = new Array();
 	for(var i=0; i<itemBomObj.bomComponentLines.length; i++)
 	{
-		if(itemNameMtx.indexOf(itemBomObj.bomComponentLines[i].itemName) == -1)
-		{
-			itemNameMtx.push(itemBomObj.bomComponentLines[i].itemName);
-			itemDescriptionMtx.push(itemBomObj.bomComponentLines[i].itemDescription);
-			itemQtyOnHandMtx.push(itemBomObj.bomComponentLines[i].locationQtyOnHand);
-			itemQtyAvailableMtx.push(itemBomObj.bomComponentLines[i].locationQtyAvailable);
-			itemQtyBackOrderedMtx.push(itemBomObj.bomComponentLines[i].locationQtyBackOrdered);
-			itemQtyOnOrderMtx.push(itemBomObj.bomComponentLines[i].locationQtyOnOrder);
-		}
+		itemNameMtx.push(itemBomObj.bomComponentLines[i].itemName);
+		itemNameBomLevelMtx.push(itemBomObj.bomComponentLines[i].itemName + '_' + itemBomObj.bomComponentLines[i].levelBOM);
+		itemParentItemNameMtx.push(itemBomObj.bomComponentLines[i].parentItemName);
+		itemBomLevelMtx.push(itemBomObj.bomComponentLines[i].levelBOM);
+		itemDescriptionMtx.push(itemBomObj.bomComponentLines[i].itemDescription);
+		itemQtyOnHandMtx.push(itemBomObj.bomComponentLines[i].locationQtyOnHand);
+		itemQtyAvailableMtx.push(itemBomObj.bomComponentLines[i].locationQtyAvailable);
+		itemQtyBackOrderedMtx.push(itemBomObj.bomComponentLines[i].locationQtyBackOrdered);
+		itemQtyOnOrderMtx.push(itemBomObj.bomComponentLines[i].locationQtyOnOrder);
 	}
 
 	//Adding Item Description
@@ -207,8 +231,11 @@ function buildCustomReport()
 	
 	//--- Start Step 3: Build & Display HTML Report ---//
 	
+	//Identify Parent Items to Sort HTML Table Rows
+	
+	
 	var reportHTML = '<br>';
-	reportHTML +=	'<table border="1" style="width:1300px; border-collapse:collapse;">';
+	reportHTML +=	'<table id="tblCustomCostedBOMInquiry" border="1" style="width:1300px; border-collapse:collapse;">';
 	reportHTML +=		'<tr>';
 	
 	for(var i=0; i<NsReportColumnNames.length; i++)
@@ -221,53 +248,64 @@ function buildCustomReport()
 	
 	reportHTML +=			'</tr>';
 	
+	//Array with Cells of HTML Table Row
+	var htmlTableRowItemNameMtx = new Array();
+	var htmlTableRowItemNameBomLevelMtx = new Array();
+	var htmlTableRowCellsMtx = new Array();
 	
 	for(var i=0; i<NsReportRowValues.length-1; i++)
 	{
-		reportHTML +=	'<tr>';
+		//Remove HMTL Tags to get Item Name
+		var tempDiv = document.createElement("div");
+		tempDiv.innerHTML = NsReportRowValues[i][0];
+		var itemName = tempDiv.textContent || tempDiv.innerText || "";
+		htmlTableRowItemNameMtx.push(itemName);
+		htmlTableRowItemNameBomLevelMtx.push(itemName + '_' + NsReportRowValues[i][2]);
+		
+		var htmlTableRow =	'<tr>';
 		
 		for(var j=0; j<NsReportRowValues[i].length; j++)
 		{
 			if(j<=1)
-				reportHTML +=	'<td style="width:150px;">' + NsReportRowValues[i][j] + '</td>';
+				htmlTableRow +=	'<td style="width:150px;">' + NsReportRowValues[i][j] + '</td>';
 			else
-				reportHTML +=	'<td align="right">' +  (isNaN(NsReportRowValues[i][j]) ? NsReportRowValues[i][j] : parseFloat(Number(NsReportRowValues[i][j]).toFixed(8))) + '</td>';
+				htmlTableRow +=	'<td align="right">' +  (isNaN(NsReportRowValues[i][j]) ? NsReportRowValues[i][j] : parseFloat(Number(NsReportRowValues[i][j]).toFixed(8))) + '</td>';
 		}
 		
-		reportHTML +=	'</tr>';
+		htmlTableRow +=	'</tr>';
+		htmlTableRowCellsMtx.push(htmlTableRow);
 	}
-
+	
+	//Sort by Parent Items + BOM Levels
+	var sortedHtmlTableRows = new Array();
+	var sortedHtmlTableRowItemNameBomLevel = new Array();
+	for(var i=0; i<itemNameBomLevelMtx.length; i++)
+	{
+		var htmlTableRowCellIndex = htmlTableRowItemNameBomLevelMtx.indexOf(itemNameBomLevelMtx[i]);
+		if(htmlTableRowCellIndex != -1)
+		{
+			//Look for a Parent Item to Sort
+			if(itemBomLevelMtx[i] > 1 && notEmpty(itemParentItemNameMtx[i]))
+			{
+				var parentItemSortedHtmlTableRowIndex = sortedHtmlTableRowItemNameBomLevel.indexOf(itemParentItemNameMtx[i] + '_' + (itemBomLevelMtx[i]-1));
+				sortedHtmlTableRows.splice(parentItemSortedHtmlTableRowIndex + 1, 0, htmlTableRowCellsMtx[htmlTableRowCellIndex]);
+				sortedHtmlTableRowItemNameBomLevel.splice(parentItemSortedHtmlTableRowIndex + 1, 0, htmlTableRowItemNameBomLevelMtx[htmlTableRowCellIndex]);
+			}
+			else
+			{
+				sortedHtmlTableRows.push(htmlTableRowCellsMtx[htmlTableRowCellIndex]);
+				sortedHtmlTableRowItemNameBomLevel.push(htmlTableRowItemNameBomLevelMtx[htmlTableRowCellIndex]);
+			}
+		}
+	}
+	
+	for(var i=0; i<sortedHtmlTableRows.length; i++)
+		reportHTML += sortedHtmlTableRows[i];
+	
 	reportHTML +=	'</table>';
 	reportHTML +=	'<br><br>';
 	
 	nlapiSetFieldValue('custpage_report', reportHTML, false);
-	
-	//Build CSV content and save it into a hidden field of this form
-	var csvHeader = '';
-	for(var i=0; i<NsReportColumnNames.length; i++)
-		csvHeader += '"' + NsReportColumnNames[i].toUpperCase().trim() + '",'
-	
-	var csvContent = csvHeader + '\n';	
-	
-	for(var i=0; i<NsReportRowValues.length-1; i++)
-	{
-		for(var j=0; j<NsReportRowValues[i].length; j++)
-		{
-			if(j==0)
-			{
-				//Remove HMTL Tags to get Item Name
-				var tempDiv = document.createElement("div");
-				tempDiv.innerHTML = NsReportRowValues[i][j];
-				csvContent += '"' + (tempDiv.textContent || tempDiv.innerText || "") + '",';
-			}
-			else
-				csvContent += '"' + String(NsReportRowValues[i][j]).replace('&nbsp;', '').replace('&amp;', '&').replace('&quot;', '"') + '",';
-		}
-			
-		csvContent += '\n';	
-	}
-	
-	nlapiSetFieldValue('custpage_csv_content', csvContent, false);
 	
 	//--- End Step 3 ---//	
 }
@@ -303,7 +341,8 @@ function getItemBomObj(topItemId, inventoryLocationId, topQty)
 		{
 			var itemBomLineObj = new Object();
 			itemBomLineObj.levelBOM = levelBOM;
-			itemBomLineObj.parentItem = parseInt(srItemBOM[i].getValue('internalid'));
+			itemBomLineObj.parentItemId = parseInt(srItemBOM[i].getValue('internalid'));
+			itemBomLineObj.parentItemName = srItemBOM[i].getValue('itemid');
 			itemBomLineObj.itemId = srItemBOM[i].getValue('memberitem'); 
 			itemBomLineObj.itemName = srItemBOM[i].getText('memberitem'); 
 			itemBomLineObj.itemDescription = srItemBOM[i].getValue('description', 'memberitem');
@@ -375,6 +414,7 @@ function getChildBomComponents(itemList, locationId)
 	
 	var columnBomItem = new Array();
 	columnBomItem.push(new nlobjSearchColumn('internalid'));
+	columnBomItem.push(new nlobjSearchColumn('itemid'));
 	columnBomItem.push(new nlobjSearchColumn('memberitem'));
 	columnBomItem.push(new nlobjSearchColumn('memberquantity'));
 	columnBomItem.push(new nlobjSearchColumn('description', 'memberitem'));

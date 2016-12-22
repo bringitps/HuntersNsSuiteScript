@@ -24,7 +24,6 @@ function buildCostedBomInquiryForm(request, response)
 	form.addField('custpage_date', 'date', 'Date', null, 'custpage_filter_group');
 
 	var filterGroup = form.addFieldGroup('custpage_report_group', 'Results');
-	var csvReportContent = form.addField('custpage_csv_content', 'textarea', null, null, 'custpage_report_group').setDisplayType('hidden');
 	var resultsReportHTML = form.addField('custpage_report', 'inlinehtml', null, null, 'custpage_report_group');
 	var NsReportIframeHTML = form.addField('custpage_div', 'inlinehtml', null, null, 'custpage_report_group');
 
