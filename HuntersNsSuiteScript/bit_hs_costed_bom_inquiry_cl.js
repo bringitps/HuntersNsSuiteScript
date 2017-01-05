@@ -39,8 +39,6 @@ function exportCsv()
 				if(i==0 || j==0)
 					cellText = (cellContent.textContent || cellContent.innerText || "");
 				
-				//alert(customCostedBOMInquiryReportHtmlBodyTable.rows[i].cells[j].innerHTML);
-				//alert(customCostedBOMInquiryReportHtmlBodyTable.rows[i].cells[j]);
 				csvContent += '"' + cellText + '",';
 			}
 			csvContent += '\n';
@@ -321,10 +319,10 @@ function getItemBomObj(topItemId, inventoryLocationId, topQty)
 	itemBomObj.locationId = inventoryLocationId;
 
 	var bomItemIdMtx = new Array();
-	bomItemIdMtx.push(topItemId);
+	bomItemIdMtx.push(parseInt(topItemId));
 
 	var bomItemQtyMtx = new Array();
-	bomItemQtyMtx.push(topQty);
+	bomItemQtyMtx.push(parseFloat(topQty));
 	
 	var itemBomLines = new Array();
 
@@ -352,7 +350,7 @@ function getItemBomObj(topItemId, inventoryLocationId, topQty)
 			itemBomLineObj.locationQtyBackOrdered = parseFloat(notEmpty(srItemBOM[i].getValue('locationquantitybackordered', 'memberitem')) ? srItemBOM[i].getValue('locationquantitybackordered', 'memberitem') : 0); 
 			itemBomLineObj.locationQtyOnOrder = parseFloat(notEmpty(srItemBOM[i].getValue('locationquantityonorder', 'memberitem')) ? srItemBOM[i].getValue('locationquantityonorder', 'memberitem') : 0); 
 			
-			var processingBomItemIndex = processingBomItemIdMtx.indexOf(itemBomLineObj.parentItem);
+			var processingBomItemIndex = processingBomItemIdMtx.indexOf(itemBomLineObj.parentItemId);
 			var parentBomQuantity = processingBomItemQtyMtx[processingBomItemIndex];
 			
 			itemBomLineObj.assemblyQuantity = parseFloat(notEmpty(srItemBOM[i].getValue('memberquantity')) ? parseFloat(srItemBOM[i].getValue('memberquantity')) : 1);
